@@ -1,21 +1,29 @@
 package com.example.mamn01_inlamning1;
-
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 
 import android.content.DialogInterface;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.media.MediaPlayer;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.VibrationEffect;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.os.Vibrator;
 
 public class Compass extends AppCompatActivity implements SensorEventListener {
+    private MediaPlayer mp = new MediaPlayer();
     ImageView compass_img;
     TextView txt_compass;
-    int mAzimuth;
+    float mAzimuth = 361;
+    ImageView imageView;
     private SensorManager mSensorManager;
     private Sensor mRotationV, mAccelerometer, mMagnetometer;
     boolean haveSensor = false, haveSensor2 = false;
@@ -25,15 +33,27 @@ public class Compass extends AppCompatActivity implements SensorEventListener {
     private float[] mLastMagnetometer = new float[3];
     private boolean mLastAccelerometerSet = false;
     private boolean mLastMagnetometerSet = false;
+    private static final float ALPHA = 0.7f; // if ALPHA = 1 OR 0, no filter applies.
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_compass);
+        mp = MediaPlayer.create(this, R.raw.pling);
+        imageView= (ImageView) findViewById(R.id.img_compass);
+        imageView.setImageResource(R.drawable.compass2);
 
         mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
         compass_img = (ImageView) findViewById(R.id.img_compass);
         txt_compass = (TextView) findViewById(R.id.txt_azimuth);
+
+
+        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        ActionBar ab = getSupportActionBar();
+
+        // Enable the Up button
+        ab.setDisplayHomeAsUpEnabled(true);
 
         start();
     }
@@ -69,14 +89,8 @@ public class Compass extends AppCompatActivity implements SensorEventListener {
     }
 
     public void stop() {
-        if(haveSensor && haveSensor2){
-            mSensorManager.unregisterListener(this,mAccelerometer);
-            mSensorManager.unregisterListener(this,mMagnetometer);
-        }
-        else{
-            if(haveSensor)
-                mSensorManager.unregisterListener(this,mRotationV);
-        }
+        mSensorManager.unregisterListener(this);
+        mSensorManager = null;
     }
 
     @Override
@@ -91,11 +105,13 @@ public class Compass extends AppCompatActivity implements SensorEventListener {
         start();
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     public void onSensorChanged(SensorEvent event) {
+
         if (event.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR) {
             SensorManager.getRotationMatrixFromVector(rMat, event.values);
-            mAzimuth = (int) (Math.toDegrees(SensorManager.getOrientation(rMat, orientation)[0]) + 360) % 360;
+            mAzimuth = lowPass((int) (Math.toDegrees(SensorManager.getOrientation(rMat, orientation)[0]) + 360) % 360, mAzimuth);
         }
 
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
@@ -108,7 +124,7 @@ public class Compass extends AppCompatActivity implements SensorEventListener {
         if (mLastAccelerometerSet && mLastMagnetometerSet) {
             SensorManager.getRotationMatrix(rMat, null, mLastAccelerometer, mLastMagnetometer);
             SensorManager.getOrientation(rMat, orientation);
-            mAzimuth = (int) (Math.toDegrees(SensorManager.getOrientation(rMat, orientation)[0]) + 360) % 360;
+            mAzimuth = lowPass((int) (Math.toDegrees(SensorManager.getOrientation(rMat, orientation)[0]) + 360) % 360, mAzimuth);
         }
 
         mAzimuth = Math.round(mAzimuth);
@@ -116,16 +132,23 @@ public class Compass extends AppCompatActivity implements SensorEventListener {
 
         String where = "NW";
 
-        if (mAzimuth >= 350 || mAzimuth <= 10)
+        if (mAzimuth >= 350 || mAzimuth <= 10) {
+            ((Vibrator) getSystemService(VIBRATOR_SERVICE)).vibrate(VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE));
+            imageView.setImageResource(R.drawable.compass2_north);
             where = "N";
+        } else {
+            imageView.setImageResource(R.drawable.compass2);
+        }
         if (mAzimuth < 350 && mAzimuth > 280)
             where = "NW";
         if (mAzimuth <= 280 && mAzimuth > 260)
             where = "W";
         if (mAzimuth <= 260 && mAzimuth > 190)
             where = "SW";
-        if (mAzimuth <= 190 && mAzimuth > 170)
+        if (mAzimuth <= 190 && mAzimuth > 170) {
+            mp.start();
             where = "S";
+        }
         if (mAzimuth <= 170 && mAzimuth > 100)
             where = "SE";
         if (mAzimuth <= 100 && mAzimuth > 80)
@@ -135,6 +158,14 @@ public class Compass extends AppCompatActivity implements SensorEventListener {
 
 
         txt_compass.setText(mAzimuth + "° " + where);
+    }
+
+
+    protected float lowPass(float input, float output) {
+        if(output == 361) return input;
+        if(Math.abs(input-output) > 100) return input; // Ifall den går från 0 till 359 eller tvärtom t.ex.
+        output = output + (ALPHA * (input - output));
+        return output;
     }
 
     @Override

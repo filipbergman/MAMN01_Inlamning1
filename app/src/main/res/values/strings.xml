@@ -3,6 +3,6 @@
     <string name="edit_message">Enter a message</string>
     <string name="button_send">Send</string>
     <string name="button_compass">Compass</string>
-    <string name="button_sensors">Sensors</string>
+    <string name="button_sensors">Accelerometers</string>
 
 </resources>
